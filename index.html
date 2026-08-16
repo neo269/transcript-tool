@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Transcript Extractor</title>
+<style>
+  :root {
+    --ink: #14110f;
+    --paper: #f7f4ee;
+    --line: #d9d2c5;
+    --accent: #2f5d50;
+    --accent-soft: #e4ede9;
+    --muted: #6b6355;
+    --amber: #c07a2b;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 40px 22px 80px; }
+
+  header h1 {
+    font-size: clamp(28px, 6vw, 42px);
+    letter-spacing: -0.02em;
+    margin: 0 0 6px;
+    font-weight: 600;
+  }
+  header p.sub {
+    margin: 0 0 32px;
+    color: var(--muted);
+    font-size: 16px;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+  }
+
+  .card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    margin-bottom: 26px;
+  }
+
+  .step-title {
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 700;
+    margin: 0 0 14px;
+  }
+  h2.card-h {
+    font-size: 21px;
+    margin: 2px 0 14px;
+    font-weight: 600;
+  }
+
+  ol.steps {
+    margin: 0;
+    padding-left: 0;
+    list-style: none;
+    counter-reset: s;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: 15px;
+  }
+  ol.steps li {
+    counter-increment: s;
+    position: relative;
+    padding: 0 0 14px 40px;
+    color: #2c2820;
+  }
+  ol.steps li:last-child { padding-bottom: 0; }
+  ol.steps li::before {
+    content: counter(s);
+    position: absolute;
+    left: 0; top: -2px;
+    width: 26px; height: 26px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  kbd {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    background: #f0ece2;
+    border: 1px solid var(--line);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    padding: 1px 6px;
+    font-size: 13px;
+  }
+  .tip {
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: 13.5px;
+    color: var(--muted);
+    background: #fbf8f2;
+    border-left: 3px solid var(--amber);
+    padding: 10px 14px;
+    border-radius: 0 6px 6px 0;
+    margin-top: 16px;
+  }
+
+  /* Drop zone */
+  .drop {
+    border: 2px dashed var(--line);
+    border-radius: var(--radius);
+    background: #fff;
+    padding: 34px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+  }
+  .drop.drag { border-color: var(--accent); background: var(--accent-soft); }
+  .drop strong { color: var(--accent); }
+  .drop .small { display:block; margin-top:6px; font-size:13px; color: var(--muted); }
+
+  textarea {
+    width: 100%;
+    min-height: 130px;
+    margin-top: 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 12.5px;
+    resize: vertical;
+    background: #fcfbf8;
+    color: #2c2820;
+  }
+  textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+
+  .row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+  button {
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 22px;
+    cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: #fff; }
+  button.primary:hover { background: #244a40; }
+  button.ghost { background: #fff; border: 1px solid var(--line); color: var(--ink); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+
+  #status {
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px;
+    margin-top: 14px;
+    min-height: 20px;
+  }
+  #status.err { color: #a13a2a; }
+  #status.ok { color: var(--accent); }
+
+  #preview {
+    display: none;
+    margin-top: 20px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: #fff;
+    max-height: 420px;
+    overflow: auto;
+    padding: 20px 24px;
+    white-space: pre-wrap;
+    font-size: 15px;
+  }
+  #preview .doc-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  #preview .doc-sub { color: var(--muted); font-size: 14px; font-family: ui-sans-serif, system-ui, sans-serif; margin-bottom: 20px; }
+  #preview .h { font-weight: 700; text-transform: uppercase; letter-spacing: .04em; font-size: 14px; color: var(--accent); margin: 22px 0 8px; font-family: ui-sans-serif, system-ui, sans-serif; }
+  #preview p { margin: 0 0 12px; }
+
+  footer { text-align:center; margin-top:40px; font-family: ui-sans-serif, system-ui, sans-serif; font-size:12.5px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Transcript Extractor</h1>
+    <p class="sub">Turn a Paper2Audio JSON into clean, readable text with section headings.</p>
+  </header>
+
+  <!-- STEP 1: get the JSON -->
+  <section class="card">
+    <p class="step-title">Step 1 · Get the JSON from the app</p>
+    <h2 class="card-h">Copy the response out of your browser</h2>
+    <ol class="steps">
+      <li>Open the Paper2Audio page with the summary you want.</li>
+      <li>Press <kbd>F12</kbd> (or right-click → <b>Inspect</b>) to open Developer Tools.</li>
+      <li>Click the <b>Network</b> tab at the top.</li>
+      <li>Reload the page with <kbd>F5</kbd> so it captures the requests.</li>
+      <li>Click the <b>search icon</b> (🔍, next to the red circle) and type a distinctive word from the transcript.</li>
+      <li>Click the result — it jumps to a request named like <b>AuthorName-BookTitle-…</b></li>
+      <li>Right-click that request → <b>Copy</b> → <b>Copy response</b>.</li>
+    </ol>
+    <div class="tip">Can't find it by search? Click the <b>Fetch/XHR</b> filter, then check each request's <b>Preview</b> tab for one full of readable words. If “Copy response” misbehaves, use <b>Save all as HAR</b> and open that file below instead.</div>
+  </section>
+
+  <!-- STEP 2: feed it in -->
+  <section class="card">
+    <p class="step-title">Step 2 · Drop it here</p>
+    <h2 class="card-h">Paste or load the JSON</h2>
+    <div class="drop" id="drop">
+      <strong>Click to choose a file</strong> or drag a <b>.json</b> / <b>.har</b> file here
+      <span class="small">…or paste the copied text into the box below</span>
+    </div>
+    <input type="file" id="file" accept=".json,.har,.txt,application/json" hidden>
+    <textarea id="paste" placeholder="Paste the copied JSON here…"></textarea>
+    <div class="row">
+      <button class="primary" id="go">Build transcript</button>
+      <button class="ghost" id="clear">Clear</button>
+    </div>
+    <div id="status"></div>
+  </section>
+
+  <!-- BACKUP: jqplay -->
+  <section class="card">
+    <p class="step-title">Backup · No install, no AI</p>
+    <h2 class="card-h">Do it manually with jqplay</h2>
+    <p style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:15px;color:#2c2820;margin:0 0 16px;">
+      If this page ever isn't handy, you can extract the text yourself at
+      <a href="https://play.jqlang.org/" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600;">play.jqlang.org</a>.
+      You'll get the raw transcript this way (headings not woven in), but it's quick and runs without any tools.
+    </p>
+    <ol class="steps">
+      <li>Open <b>play.jqlang.org</b>.</li>
+      <li>Paste your JSON into the <b>JSON</b> box (bottom-left).</li>
+      <li>In the <b>Query</b> box (top-left), type: <kbd>[.segments[].transcript] | join("\n\n")</kbd></li>
+      <li>Open the <b>Options</b> dropdown and turn on <b>raw output (-r)</b> so quotes and <kbd>\n</kbd> become real line breaks.</li>
+      <li>Copy the clean text from the <b>Output</b> box on the right.</li>
+    </ol>
+    <div class="tip">Want the section titles too? Run a second query — <kbd>.tableOfContents[].transcript</kbd> — to list all the headings, though you'd have to slot them in by hand. For headings already in place, use this page above instead.</div>
+  </section>
+
+  <!-- STEP 3: result -->
+  <section class="card" id="resultCard" style="display:none;">
+    <p class="step-title">Step 3 · Your transcript</p>
+    <h2 class="card-h" id="resultTitle">Ready</h2>
+    <div class="row">
+      <button class="primary" id="download">Download .txt</button>
+      <button class="ghost" id="copy">Copy text</button>
+    </div>
+    <div id="preview"></div>
+  </section>
+
+  <footer>Runs entirely in your browser. Nothing you paste is uploaded anywhere.</footer>
+</div>
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const drop = $('drop'), fileInput = $('file'), paste = $('paste');
+  const status = $('status'), resultCard = $('resultCard'), preview = $('preview');
+  let built = null; // { title, sub, blocks:[{heading, paras:[]}] }
+
+  function setStatus(msg, kind) {
+    status.textContent = msg || '';
+    status.className = kind || '';
+  }
+
+  // ---- File loading ----
+  drop.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (f) readFile(f);
+  });
+  ['dragover','dragenter'].forEach(ev =>
+    drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('drag'); }));
+  ['dragleave','drop'].forEach(ev =>
+    drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drag'); }));
+  drop.addEventListener('drop', e => {
+    const f = e.dataTransfer.files[0];
+    if (f) readFile(f);
+  });
+  function readFile(f) {
+    const r = new FileReader();
+    r.onload = () => { paste.value = r.result; setStatus('Loaded ' + f.name + '. Click “Build transcript”.', 'ok'); };
+    r.onerror = () => setStatus('Could not read that file.', 'err');
+    r.readAsText(f);
+  }
+
+  // ---- Core: pull the data object out of whatever was pasted ----
+  // Handles: raw JSON object, a HAR file (finds the entry whose response has segments),
+  // or JSON wrapped in extra text.
+  function findDataObject(raw) {
+    let obj;
+    try { obj = JSON.parse(raw); }
+    catch (e) {
+      // try to locate the first {...} that parses
+      const start = raw.indexOf('{');
+      const end = raw.lastIndexOf('}');
+      if (start === -1 || end === -1) throw new Error('That doesn\'t look like JSON.');
+      obj = JSON.parse(raw.slice(start, end + 1));
+    }
+    // Direct hit
+    if (obj && Array.isArray(obj.segments)) return obj;
+
+    // HAR file: dig into log.entries[].response.content.text
+    if (obj && obj.log && Array.isArray(obj.log.entries)) {
+      for (const entry of obj.log.entries) {
+        const text = entry.response && entry.response.content && entry.response.content.text;
+        if (!text) continue;
+        try {
+          const inner = JSON.parse(text);
+          if (inner && Array.isArray(inner.segments)) return inner;
+        } catch (_) {}
+      }
+      throw new Error('Found a HAR file, but no transcript request inside it.');
+    }
+    throw new Error('No "segments" list found in this JSON.');
+  }
+
+  // ---- Build structured transcript ----
+  function build(data) {
+    const segments = data.segments || [];
+    // Map: segment index -> heading text (from tableOfContents)
+    const headingByIndex = {};
+    const toc = data.tableOfContents || data.progressSegments || [];
+    toc.forEach(h => {
+      if (h && typeof h.index === 'number' && h.transcript) {
+        headingByIndex[h.index] = h.transcript.trim();
+      }
+    });
+
+    const title = (data.extractedTitle || 'Transcript').trim();
+    const author = (data.extractedMinifiedAuthorInfo || '').trim();
+    const sub = author ? ('By ' + author) : '';
+
+    const blocks = [];
+    let current = null;
+    segments.forEach(seg => {
+      const idx = seg.index;
+      if (headingByIndex.hasOwnProperty(idx)) {
+        current = { heading: headingByIndex[idx], paras: [] };
+        blocks.push(current);
+      }
+      if (!current) { current = { heading: '', paras: [] }; blocks.push(current); }
+      const t = (seg.transcript || '').trim();
+      if (t) current.paras.push(t);
+    });
+
+    return { title, sub, blocks };
+  }
+
+  function toPlainText(b) {
+    let out = b.title + '\n';
+    if (b.sub) out += b.sub + '\n';
+    out += '='.repeat(Math.max(b.title.length, 8)) + '\n\n';
+    b.blocks.forEach(block => {
+      if (block.heading) out += '\n' + block.heading.toUpperCase() + '\n\n';
+      out += block.paras.join('\n\n') + '\n';
+    });
+    return out.trim() + '\n';
+  }
+
+  function render(b) {
+    let html = '<div class="doc-title">' + esc(b.title) + '</div>';
+    if (b.sub) html += '<div class="doc-sub">' + esc(b.sub) + '</div>';
+    b.blocks.forEach(block => {
+      if (block.heading) html += '<div class="h">' + esc(block.heading) + '</div>';
+      block.paras.forEach(p => html += '<p>' + esc(p) + '</p>');
+    });
+    preview.innerHTML = html;
+    preview.style.display = 'block';
+  }
+  function esc(s){ return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+  // ---- Actions ----
+  $('go').addEventListener('click', () => {
+    const raw = paste.value.trim();
+    if (!raw) { setStatus('Paste the JSON or load a file first.', 'err'); return; }
+    try {
+      const data = findDataObject(raw);
+      built = build(data);
+      const count = built.blocks.reduce((n,b)=>n+b.paras.length,0);
+      render(built);
+      resultCard.style.display = 'block';
+      $('resultTitle').textContent = built.title + (built.sub ? ' — ' + built.sub : '');
+      setStatus('Done — ' + count + ' paragraphs across ' + built.blocks.filter(b=>b.heading).length + ' sections.', 'ok');
+      resultCard.scrollIntoView({ behavior:'smooth', block:'start' });
+    } catch (err) {
+      setStatus(err.message || 'Could not parse that.', 'err');
+    }
+  });
+
+  $('download').addEventListener('click', () => {
+    if (!built) return;
+    const text = toPlainText(built);
+    const safe = built.title.replace(/[^a-z0-9]+/gi,'_').replace(/^_+|_+$/g,'') || 'transcript';
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = safe + '.txt';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  $('copy').addEventListener('click', async () => {
+    if (!built) return;
+    try { await navigator.clipboard.writeText(toPlainText(built)); setStatus('Copied to clipboard.', 'ok'); }
+    catch (_) { setStatus('Copy failed — select the text manually.', 'err'); }
+  });
+
+  $('clear').addEventListener('click', () => {
+    paste.value = ''; built = null;
+    preview.style.display = 'none'; resultCard.style.display = 'none';
+    setStatus('');
+  });
+})();
+</script>
+</body>
+</html>
